@@ -19,7 +19,7 @@ from src.pipeline.prompts import (
 )
 from src.pipeline.stage_result import StageResult
 from src.provider import get_llm_client
-from src.utils.agent_config import load_agent_config
+from src.utils.agent_config import load_agent_config, resolve_model
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -32,7 +32,7 @@ class Step6SeoOptimization:
         self._settings = settings
         self._client = get_llm_client(settings)
         _cfg = load_agent_config(__file__)
-        self._model = _cfg.get("model", self._client.model)
+        self._model = resolve_model(_cfg, self._client)
         self._temperature = _cfg.get("temperature", 0.2)
         self._max_tokens = _cfg.get("max_tokens", 4096)
         self._system_prompt = _cfg.get("system_prompt", SEO_EXPERT_SYSTEM)
