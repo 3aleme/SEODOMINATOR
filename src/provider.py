@@ -92,7 +92,9 @@ class _OpenAICompatMessages:
         oai_msgs = [{"role": "system", "content": self._to_text(system)}]
         for msg in messages:
             oai_msgs.append({"role": msg["role"], "content": self._to_text(msg["content"])})
-        resp = self._c.chat.completions.create(model=model, messages=oai_msgs, max_tokens=max_tokens)
+        # Pass through supported OpenAI params (temperature, top_p, etc.)
+        oai_kwargs = {k: v for k, v in kwargs.items() if k in ("temperature", "top_p", "presence_penalty", "frequency_penalty")}
+        resp = self._c.chat.completions.create(model=model, messages=oai_msgs, max_tokens=max_tokens, **oai_kwargs)
         text = resp.choices[0].message.content
         return _Response(text, resp.usage.prompt_tokens, resp.usage.completion_tokens)
 

@@ -22,13 +22,10 @@ from src.pipeline.prompts import (
 )
 from src.pipeline.stage_result import StageResult
 from src.provider import get_llm_client
+from src.utils.agent_config import load_agent_config
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-_MAX_TOKENS_DRAFT = 8192
-_MAX_TOKENS_REVIEW = 2048
-_MAX_TOKENS_REVISION = 8192
 
 
 class Step5DeepWrite:
@@ -37,6 +34,11 @@ class Step5DeepWrite:
     def __init__(self, settings=None):
         self._settings = settings
         self._client = get_llm_client(settings)
+        _cfg = load_agent_config(__file__)
+        self._model = _cfg.get("model", self._client.model)
+        self._temperature = _cfg.get("temperature", 0.7)
+        self._max_tokens = _cfg.get("max_tokens", 4096)
+        self._system_prompt = _cfg.get("system_prompt", SEO_EXPERT_SYSTEM)
 
     def run(self, blueprint: dict, keyword_clusters: dict) -> dict:
         """
@@ -68,9 +70,10 @@ class Step5DeepWrite:
         logger.info(f"Pass 1: Writing expert draft for '{primary_keyword}'...")
         p1_prompt = deep_write_pass1_prompt(blueprint, primary_keyword, supporting_keywords)
         p1_response = self._client.messages.create(
-            model=self._client.model,
-            max_tokens=_MAX_TOKENS_DRAFT,
-            system=[make_cache_block(SEO_EXPERT_SYSTEM)],
+            model=self._model,
+            max_tokens=self._max_tokens,
+            temperature=self._temperature,
+            system=[make_cache_block(self._system_prompt)],
             messages=[{"role": "user", "content": [make_text_block(p1_prompt)]}],
         )
         draft = p1_response.content[0].text.strip()
@@ -84,9 +87,10 @@ class Step5DeepWrite:
         logger.info("Pass 2: Running quality review...")
         p2_prompt = deep_write_pass2_review_prompt(draft, blueprint, primary_keyword)
         p2_response = self._client.messages.create(
-            model=self._client.model,
-            max_tokens=_MAX_TOKENS_REVIEW,
-            system=[make_cache_block(SEO_EXPERT_SYSTEM)],
+            model=self._model,
+            max_tokens=self._max_tokens,
+            temperature=self._temperature,
+            system=[make_cache_block(self._system_prompt)],
             messages=[{"role": "user", "content": [make_text_block(p2_prompt)]}],
         )
         raw_review = p2_response.content[0].text.strip()
@@ -115,9 +119,10 @@ class Step5DeepWrite:
             logger.info("Pass 3: Applying revisions...")
             p3_prompt = deep_write_pass3_revision_prompt(draft, review)
             p3_response = self._client.messages.create(
-                model=self._client.model,
-                max_tokens=_MAX_TOKENS_REVISION,
-                system=[make_cache_block(SEO_EXPERT_SYSTEM)],
+                model=self._model,
+                max_tokens=self._max_tokens,
+                temperature=self._temperature,
+                system=[make_cache_block(self._system_prompt)],
                 messages=[{"role": "user", "content": [make_text_block(p3_prompt)]}],
             )
             final_article = p3_response.content[0].text.strip()

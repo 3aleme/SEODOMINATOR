@@ -29,6 +29,7 @@ from src.pipeline.prompts import (
 )
 from src.pipeline.stage_result import StageResult
 from src.provider import get_llm_client
+from src.utils.agent_config import load_agent_config
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -48,6 +49,11 @@ class Step7MediaGeneration:
     def __init__(self, settings=None):
         self._settings = settings
         self._client = get_llm_client(settings)
+        _cfg = load_agent_config(__file__)
+        self._model = _cfg.get("model", self._client.model)
+        self._temperature = _cfg.get("temperature", 0.7)
+        self._max_tokens = _cfg.get("max_tokens", 4096)
+        self._system_prompt = _cfg.get("system_prompt", SEO_EXPERT_SYSTEM)
 
     def run(self, seo_output: dict) -> dict:
         """
@@ -150,9 +156,10 @@ class Step7MediaGeneration:
 
     def _craft_prompt(self, user_prompt: str) -> Tuple[str, int, int]:
         response = self._client.messages.create(
-            model=self._client.model,
-            max_tokens=256,
-            system=[make_cache_block(SEO_EXPERT_SYSTEM)],
+            model=self._model,
+            max_tokens=self._max_tokens,
+            temperature=self._temperature,
+            system=[make_cache_block(self._system_prompt)],
             messages=[{"role": "user", "content": [make_text_block(user_prompt)]}],
         )
         return (

@@ -24,6 +24,7 @@ from src.pipeline.prompts import (
 )
 from src.pipeline.stage_result import StageResult
 from src.provider import get_llm_client
+from src.utils.agent_config import load_agent_config
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -37,6 +38,11 @@ class Step8InternalLinking:
     def __init__(self, settings=None):
         self._settings = settings
         self._client = get_llm_client(settings)
+        _cfg = load_agent_config(__file__)
+        self._model = _cfg.get("model", self._client.model)
+        self._temperature = _cfg.get("temperature", 0.2)
+        self._max_tokens = _cfg.get("max_tokens", 4096)
+        self._system_prompt = _cfg.get("system_prompt", SEO_EXPERT_SYSTEM)
 
     def run(self, seo_output: dict, media: Optional[dict] = None) -> dict:
         """
@@ -144,9 +150,10 @@ class Step8InternalLinking:
     def _find_forward_links(self, content: str, existing_posts: List[dict]) -> tuple:
         prompt = forward_link_injection_prompt(content, existing_posts)
         response = self._client.messages.create(
-            model=self._client.model,
-            max_tokens=2048,
-            system=[make_cache_block(SEO_EXPERT_SYSTEM)],
+            model=self._model,
+            max_tokens=self._max_tokens,
+            temperature=self._temperature,
+            system=[make_cache_block(self._system_prompt)],
             messages=[{"role": "user", "content": [make_text_block(prompt)]}],
         )
         raw = response.content[0].text.strip()
@@ -160,9 +167,10 @@ class Step8InternalLinking:
     def _find_backward_links(self, new_title: str, new_slug: str, new_excerpt: str, existing_post: dict) -> tuple:
         prompt = backward_link_injection_prompt(new_title, new_slug, new_excerpt, existing_post)
         response = self._client.messages.create(
-            model=self._client.model,
-            max_tokens=512,
-            system=[make_cache_block(SEO_EXPERT_SYSTEM)],
+            model=self._model,
+            max_tokens=self._max_tokens,
+            temperature=self._temperature,
+            system=[make_cache_block(self._system_prompt)],
             messages=[{"role": "user", "content": [make_text_block(prompt)]}],
         )
         raw = response.content[0].text.strip()
