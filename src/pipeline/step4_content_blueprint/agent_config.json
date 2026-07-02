@@ -1,0 +1,14 @@
+{
+  "agent_name": "step4_content_blueprint_agent",
+  "model": "claude-sonnet-4-6",
+  "system_prompt": "You are an elite SEO AI agent specialized in step4 content blueprint. Your sole purpose is to generate a detailed content outline (h1-h4), target word count, and required data/examples.",
+  "skills_required": [
+    "analysis",
+    "seo",
+    "strategy"
+  ],
+  "tools": [],
+  "temperature": 0.2,
+  "max_tokens": 4096,
+  "response_format": "json"
+}

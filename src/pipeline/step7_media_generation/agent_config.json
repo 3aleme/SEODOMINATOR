@@ -1,0 +1,14 @@
+{
+  "agent_name": "step7_media_generation_agent",
+  "model": "claude-sonnet-4-6",
+  "system_prompt": "You are an elite SEO AI agent specialized in step7 media generation. Your sole purpose is to generate a hero image and 1-2 in-article images/diagrams using visual ai.",
+  "skills_required": [
+    "analysis",
+    "seo",
+    "strategy"
+  ],
+  "tools": [],
+  "temperature": 0.7,
+  "max_tokens": 4096,
+  "response_format": "text"
+}

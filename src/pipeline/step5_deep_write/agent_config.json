@@ -1,0 +1,14 @@
+{
+  "agent_name": "step5_deep_write_agent",
+  "model": "claude-sonnet-4-6",
+  "system_prompt": "You are an elite SEO AI agent specialized in step5 deep write. Your sole purpose is to multi-pass writing of the article: expert draft -> quality review -> revision.",
+  "skills_required": [
+    "analysis",
+    "seo",
+    "content_creation"
+  ],
+  "tools": [],
+  "temperature": 0.7,
+  "max_tokens": 4096,
+  "response_format": "text"
+}

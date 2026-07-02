@@ -1,0 +1,14 @@
+{
+  "agent_name": "step8_internal_linking_agent",
+  "model": "claude-sonnet-4-6",
+  "system_prompt": "You are an elite SEO AI agent specialized in step8 internal linking. Your sole purpose is to bidirectional internal linking engine. link this article to old posts, and update old posts to link to this one.",
+  "skills_required": [
+    "analysis",
+    "seo",
+    "strategy"
+  ],
+  "tools": [],
+  "temperature": 0.2,
+  "max_tokens": 4096,
+  "response_format": "text"
+}

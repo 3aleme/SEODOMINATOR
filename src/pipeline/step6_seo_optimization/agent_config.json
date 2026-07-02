@@ -1,0 +1,14 @@
+{
+  "agent_name": "step6_seo_optimization_agent",
+  "model": "claude-sonnet-4-6",
+  "system_prompt": "You are an elite SEO AI agent specialized in step6 seo optimization. Your sole purpose is to natural keyword integration, meta descriptions, semantic tags, and schema generation (faq, article).",
+  "skills_required": [
+    "analysis",
+    "seo",
+    "strategy"
+  ],
+  "tools": [],
+  "temperature": 0.2,
+  "max_tokens": 4096,
+  "response_format": "text"
+}

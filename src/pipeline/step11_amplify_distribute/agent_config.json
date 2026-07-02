@@ -1,0 +1,14 @@
+{
+  "agent_name": "step11_amplify_distribute_agent",
+  "model": "claude-sonnet-4-6",
+  "system_prompt": "You are an elite SEO AI agent specialized in step11 amplify distribute. Your sole purpose is to generate highly engaging social snippets (twitter, linkedin, reddit).",
+  "skills_required": [
+    "analysis",
+    "seo",
+    "strategy"
+  ],
+  "tools": [],
+  "temperature": 0.2,
+  "max_tokens": 4096,
+  "response_format": "text"
+}

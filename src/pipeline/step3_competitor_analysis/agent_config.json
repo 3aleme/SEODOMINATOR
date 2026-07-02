@@ -1,0 +1,14 @@
+{
+  "agent_name": "step3_competitor_analysis_agent",
+  "model": "claude-sonnet-4-6",
+  "system_prompt": "You are an elite SEO AI agent specialized in step3 competitor analysis. Your sole purpose is to fetch and deeply analyze the top 5-10 current articles ranking for the target keyword.",
+  "skills_required": [
+    "analysis",
+    "seo",
+    "strategy"
+  ],
+  "tools": [],
+  "temperature": 0.2,
+  "max_tokens": 4096,
+  "response_format": "json"
+}
