@@ -13,14 +13,14 @@
         extend: {
           colors: {
             brand: { DEFAULT: '#7c3aed', light: '#a78bfa', dark: '#5b21b6' },
-            surface: { DEFAULT: '#111111', raised: '#1a1a1a', border: '#2a2a2a' },
+            surface: { DEFAULT: '#111111', raised: '#1a1a1a', high: '#222222', border: '#2a2a2a' },
           },
           animation: {
+            'fade-in': 'fadeIn 0.25s ease-out',
             'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-            'fade-in': 'fadeIn 0.3s ease-out',
           },
           keyframes: {
-            fadeIn: { '0%': { opacity: 0, transform: 'translateY(8px)' }, '100%': { opacity: 1, transform: 'translateY(0)' } }
+            fadeIn: { '0%': { opacity: 0, transform: 'translateY(6px)' }, '100%': { opacity: 1, transform: 'translateY(0)' } }
           }
         }
       }
@@ -28,409 +28,556 @@
   </script>
   <style>
     body { background: #0a0a0a; }
-    .chip { transition: all 0.15s ease; }
-    .chip:hover { transform: translateY(-1px); }
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: #111; }
     ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-    .glow { box-shadow: 0 0 20px rgba(124, 58, 237, 0.3); }
-    .input-focus:focus { box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.5); }
+    .glow { box-shadow: 0 0 20px rgba(124,58,237,0.3); }
+    .step-connector { width: 2px; background: #2a2a2a; margin: 0 auto; height: 16px; }
+    .step-connector.done { background: #7c3aed; }
+    pre { white-space: pre-wrap; word-break: break-word; }
   </style>
 </head>
 <body class="text-gray-100 min-h-screen font-sans antialiased">
 
-  <div x-data="app()" class="max-w-3xl mx-auto px-4 py-10">
+<div x-data="app()" x-init="init()" class="max-w-3xl mx-auto px-4 py-10">
 
-    <!-- Header -->
-    <div class="mb-10 text-center">
-      <div class="inline-flex items-center gap-2 mb-3">
-        <svg class="w-7 h-7 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-        </svg>
-        <h1 class="text-2xl font-bold tracking-tight text-white">SEODOMINATOR</h1>
-      </div>
-      <p class="text-gray-500 text-sm">Rank #1 for any keyword. Start with keyword research.</p>
+  <!-- Header -->
+  <div class="mb-8 text-center">
+    <div class="inline-flex items-center gap-2 mb-2">
+      <svg class="w-6 h-6 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+      </svg>
+      <h1 class="text-xl font-bold tracking-tight text-white">SEODOMINATOR</h1>
     </div>
+    <p class="text-gray-600 text-xs">12-stage pipeline · Rank #1 for any keyword</p>
+  </div>
 
-    <!-- Main card -->
-    <div class="bg-surface-raised border border-surface-border rounded-2xl overflow-hidden">
+  <!-- Run All button -->
+  <div class="mb-6 flex items-center gap-3">
+    <button
+      @click="runAll()"
+      :disabled="runningAll || steps[0].status !== 'done' || allDone"
+      class="flex-1 py-3 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2"
+      :class="runningAll
+        ? 'bg-brand/60 text-white cursor-wait'
+        : steps[0].status !== 'done'
+          ? 'bg-surface-raised border border-surface-border text-gray-600 cursor-not-allowed'
+          : 'bg-brand hover:bg-brand-dark text-white glow'"
+    >
+      <template x-if="runningAll">
+        <span class="flex items-center gap-2">
+          <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+          Running pipeline...
+        </span>
+      </template>
+      <template x-if="!runningAll">
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3l14 9-14 9V3z"/></svg>
+          <span x-text="steps[0].status !== 'done' ? 'Run Step 1 first' : allDone ? 'Pipeline complete' : 'Run Steps 2–12'"></span>
+        </span>
+      </template>
+    </button>
+    <button
+      @click="resetAll()"
+      class="px-4 py-3 rounded-xl text-sm text-gray-500 hover:text-gray-300 border border-surface-border hover:border-gray-600 transition-all"
+      title="Clear all outputs and start over"
+    >
+      Reset
+    </button>
+  </div>
 
-      <!-- Mode tabs -->
-      <div class="flex border-b border-surface-border">
-        <button
-          @click="mode = 'manual'"
-          :class="mode === 'manual' ? 'border-b-2 border-brand text-white' : 'text-gray-500 hover:text-gray-300'"
-          class="flex-1 py-3.5 text-sm font-medium transition-colors"
+  <!-- Pipeline steps -->
+  <div class="space-y-1">
+    <template x-for="(step, idx) in steps" :key="step.id">
+      <div class="animate-fade-in">
+
+        <!-- Connector line -->
+        <div x-show="idx > 0" class="step-connector" :class="steps[idx-1].status === 'done' ? 'done' : ''"></div>
+
+        <!-- Step card -->
+        <div
+          class="border rounded-2xl overflow-hidden transition-all"
+          :class="{
+            'border-brand/60 bg-brand/5': step.status === 'done',
+            'border-yellow-500/40 bg-yellow-500/5': step.status === 'running',
+            'border-red-500/40 bg-red-500/5': step.status === 'error',
+            'border-surface-border bg-surface-raised': step.status === 'idle',
+          }"
         >
-          ✏️ &nbsp;Enter Keywords
-        </button>
-        <button
-          @click="mode = 'url'"
-          :class="mode === 'url' ? 'border-b-2 border-brand text-white' : 'text-gray-500 hover:text-gray-300'"
-          class="flex-1 py-3.5 text-sm font-medium transition-colors"
-        >
-          🤖 &nbsp;AI Suggest from URL
-        </button>
-      </div>
-
-      <div class="p-6 space-y-6">
-
-        <!-- Manual mode -->
-        <div x-show="mode === 'manual'" x-transition>
-          <label class="block text-xs font-medium text-gray-400 uppercase tracking-widest mb-3">Seed Keywords</label>
-
-          <!-- Keyword chips -->
+          <!-- Card header -->
           <div
-            class="min-h-[52px] bg-surface border border-surface-border rounded-xl px-3 py-2 flex flex-wrap gap-2 cursor-text input-focus focus-within:ring-2 focus-within:ring-brand/50 transition"
-            @click="$refs.keywordInput.focus()"
+            class="flex items-center gap-3 px-4 py-3 cursor-pointer select-none"
+            @click="toggleStep(step.id)"
           >
-            <template x-for="(kw, i) in keywords" :key="i">
-              <span class="chip inline-flex items-center gap-1.5 bg-brand/20 text-brand-light border border-brand/30 rounded-lg px-3 py-1 text-sm font-medium">
-                <span x-text="kw"></span>
-                <button @click.stop="removeKeyword(i)" class="text-brand/60 hover:text-brand-light transition ml-1">
-                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                  </svg>
-                </button>
-              </span>
-            </template>
-            <input
-              x-ref="keywordInput"
-              x-model="currentInput"
-              @keydown.enter.prevent="addKeyword"
-              @keydown.comma.prevent="addKeyword"
-              @keydown.backspace="handleBackspace"
-              placeholder="Type keyword and press Enter..."
-              class="flex-1 min-w-[180px] bg-transparent outline-none text-sm text-white placeholder-gray-600 py-1"
-            />
-          </div>
-          <p class="text-xs text-gray-600 mt-2">Press <kbd class="bg-surface border border-surface-border px-1.5 py-0.5 rounded text-gray-400">Enter</kbd> or <kbd class="bg-surface border border-surface-border px-1.5 py-0.5 rounded text-gray-400">,</kbd> to add each keyword</p>
-        </div>
-
-        <!-- URL mode -->
-        <div x-show="mode === 'url'" x-transition class="space-y-4">
-          <div>
-            <label class="block text-xs font-medium text-gray-400 uppercase tracking-widest mb-3">Competitor URL</label>
-            <div class="flex gap-2">
-              <input
-                x-model="urlInput"
-                @keydown.enter.prevent="analyzeUrl"
-                placeholder="https://competitor.com/article..."
-                class="flex-1 bg-surface border border-surface-border rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 outline-none input-focus transition"
-              />
-              <button
-                @click="analyzeUrl"
-                :disabled="analyzingUrl || !urlInput"
-                class="px-5 py-3 bg-brand hover:bg-brand-dark disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-sm font-medium text-white transition-colors flex items-center gap-2 whitespace-nowrap"
-              >
-                <span x-show="!analyzingUrl">Analyze</span>
-                <span x-show="analyzingUrl" class="flex items-center gap-2">
-                  <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                  </svg>
-                  Analyzing...
-                </span>
-              </button>
-            </div>
-            <p x-show="urlError" x-text="urlError" class="text-red-400 text-xs mt-2"></p>
-          </div>
-
-          <!-- Suggested keywords -->
-          <div x-show="suggestedKeywords.length > 0" x-transition class="space-y-3">
-            <div class="flex items-center justify-between">
-              <label class="text-xs font-medium text-gray-400 uppercase tracking-widest">Suggested Keywords</label>
-              <button @click="selectAllSuggested" class="text-xs text-brand hover:text-brand-light transition">
-                <span x-text="selectedSuggested.length === suggestedKeywords.length ? 'Deselect all' : 'Select all'"></span>
-              </button>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <template x-for="(kw, i) in suggestedKeywords" :key="i">
-                <button
-                  @click="toggleSuggested(i)"
-                  :class="selectedSuggested.includes(i)
-                    ? 'bg-brand/20 border-brand/50 text-brand-light'
-                    : 'bg-surface border-surface-border text-gray-400 hover:border-gray-500 hover:text-gray-200'"
-                  class="chip border rounded-lg px-3 py-1.5 text-sm font-medium transition-all"
-                >
-                  <span x-show="selectedSuggested.includes(i)" class="mr-1 text-brand">✓</span>
-                  <span x-text="kw"></span>
-                </button>
+            <!-- Status dot -->
+            <div class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+              :class="{
+                'bg-brand/20 text-brand-light': step.status === 'done',
+                'bg-yellow-500/20 text-yellow-400': step.status === 'running',
+                'bg-red-500/20 text-red-400': step.status === 'error',
+                'bg-surface-high text-gray-500': step.status === 'idle',
+              }"
+            >
+              <template x-if="step.status === 'done'">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+              </template>
+              <template x-if="step.status === 'running'">
+                <svg class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+              </template>
+              <template x-if="step.status === 'error'">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+              </template>
+              <template x-if="step.status === 'idle'">
+                <span x-text="step.id"></span>
               </template>
             </div>
-            <button
-              @click="addSuggestedKeywords"
-              :disabled="selectedSuggested.length === 0"
-              class="w-full py-2.5 border border-brand/40 hover:border-brand text-brand hover:text-white hover:bg-brand/20 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl text-sm font-medium transition-all"
-            >
-              Add <span x-text="selectedSuggested.length"></span> keyword<span x-show="selectedSuggested.length !== 1">s</span> to my list
-            </button>
-          </div>
-        </div>
 
-        <!-- Divider + current keywords summary (shown in URL mode if keywords exist) -->
-        <div x-show="mode === 'url' && keywords.length > 0" class="border-t border-surface-border pt-4">
-          <label class="block text-xs font-medium text-gray-400 uppercase tracking-widest mb-3">My Keywords (<span x-text="keywords.length"></span>)</label>
-          <div class="flex flex-wrap gap-2">
-            <template x-for="(kw, i) in keywords" :key="i">
-              <span class="chip inline-flex items-center gap-1.5 bg-brand/20 text-brand-light border border-brand/30 rounded-lg px-3 py-1 text-sm font-medium">
-                <span x-text="kw"></span>
-                <button @click="removeKeyword(i)" class="text-brand/60 hover:text-brand-light transition">
-                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                  </svg>
-                </button>
-              </span>
-            </template>
-          </div>
-        </div>
-
-        <!-- Run button -->
-        <div class="pt-2">
-          <button
-            @click="runStep1"
-            :disabled="running || keywords.length === 0"
-            class="w-full py-3.5 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2"
-            :class="keywords.length === 0
-              ? 'bg-surface-raised border border-surface-border text-gray-600 cursor-not-allowed'
-              : running
-                ? 'bg-brand/60 text-white cursor-wait'
-                : 'bg-brand hover:bg-brand-dark text-white glow hover:glow'"
-          >
-            <template x-if="!running">
-              <span class="flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                </svg>
-                Run Keyword Research
-              </span>
-            </template>
-            <template x-if="running">
-              <span class="flex items-center gap-2">
-                <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                </svg>
-                Fetching ideas from Google Ads + clustering...
-              </span>
-            </template>
-          </button>
-          <p x-show="runError" x-text="runError" class="text-red-400 text-xs mt-2 text-center"></p>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- Results -->
-    <div x-show="results" x-transition class="mt-6 space-y-4 animate-fade-in">
-
-      <div class="flex items-center justify-between">
-        <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-widest">Keyword Clusters</h2>
-        <span class="text-xs text-gray-500" x-text="`${results?.clusters?.length || 0} clusters found`"></span>
-      </div>
-
-      <template x-for="(cluster, i) in results?.clusters || []" :key="i">
-        <div
-          class="bg-surface-raised border rounded-xl overflow-hidden transition-all"
-          :class="cluster.is_top_target ? 'border-brand/50' : 'border-surface-border'"
-        >
-          <!-- Cluster header -->
-          <div
-            class="p-4 cursor-pointer flex items-start justify-between gap-4"
-            :class="cluster.is_top_target ? 'bg-brand/5' : ''"
-            @click="toggleCluster(i)"
-          >
+            <!-- Step info -->
             <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 flex-wrap mb-1">
-                <span x-show="cluster.is_top_target" class="inline-flex items-center gap-1 text-xs font-semibold text-brand-light bg-brand/20 border border-brand/30 px-2 py-0.5 rounded-full">
-                  ⭐ Top Target
-                </span>
-                <span class="text-xs text-gray-500 bg-surface border border-surface-border rounded-full px-2 py-0.5 capitalize" x-text="cluster.intent"></span>
-                <span class="text-xs font-mono text-gray-600" x-text="`${cluster.competition} competition`"></span>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-600 font-mono">Step <span x-text="step.id"></span></span>
+                <span class="text-sm font-medium text-white" x-text="step.label"></span>
               </div>
-              <h3 class="font-semibold text-white text-sm truncate" x-text="cluster.primary_keyword"></h3>
-              <p class="text-xs text-gray-500 mt-0.5">
-                <span x-text="cluster.avg_monthly_searches?.toLocaleString() || '—'"></span> searches/mo &nbsp;·&nbsp;
-                <span x-text="`Opportunity: ${cluster.opportunity_score}/100`"></span>
-              </p>
+              <p x-show="step.status === 'error'" x-text="step.error" class="text-xs text-red-400 mt-0.5 truncate"></p>
+              <p x-show="step.status === 'done' && step.summary" x-text="step.summary" class="text-xs text-gray-500 mt-0.5 truncate"></p>
             </div>
-            <div class="flex items-center gap-3 shrink-0">
-              <div class="text-right">
-                <div class="text-lg font-bold" :class="cluster.opportunity_score >= 70 ? 'text-green-400' : cluster.opportunity_score >= 40 ? 'text-yellow-400' : 'text-gray-500'" x-text="cluster.opportunity_score"></div>
-                <div class="text-xs text-gray-600">score</div>
-              </div>
-              <svg class="w-4 h-4 text-gray-500 transition-transform" :class="openClusters.includes(i) ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+
+            <!-- Run button (right side) -->
+            <div class="flex items-center gap-2 shrink-0">
+              <template x-if="step.id !== 1">
+                <button
+                  @click.stop="runStep(step.id)"
+                  :disabled="step.status === 'running' || runningAll"
+                  class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                  :class="step.status === 'running' || runningAll
+                    ? 'bg-surface text-gray-600 cursor-not-allowed'
+                    : step.status === 'done'
+                      ? 'border border-brand/30 text-brand-light hover:bg-brand/10'
+                      : 'bg-brand/20 border border-brand/40 text-brand-light hover:bg-brand/30'"
+                >
+                  <span x-text="step.status === 'done' ? 'Re-run' : 'Run'"></span>
+                </button>
+              </template>
+
+              <!-- Expand arrow -->
+              <svg class="w-4 h-4 text-gray-600 transition-transform" :class="openStep === step.id ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
               </svg>
             </div>
           </div>
 
-          <!-- Cluster body -->
-          <div x-show="openClusters.includes(i)" x-transition class="border-t border-surface-border px-4 py-4 space-y-4">
+          <!-- Step body (expanded) -->
+          <div x-show="openStep === step.id" x-transition class="border-t border-surface-border">
 
-            <!-- Supporting keywords -->
-            <div x-show="cluster.supporting_keywords?.length">
-              <p class="text-xs text-gray-500 uppercase tracking-widest mb-2">Supporting Keywords</p>
-              <div class="flex flex-wrap gap-1.5">
-                <template x-for="kw in cluster.supporting_keywords" :key="kw">
-                  <span class="text-xs bg-surface border border-surface-border text-gray-300 rounded-lg px-2.5 py-1" x-text="kw"></span>
-                </template>
+            <!-- Step 1: keyword input -->
+            <template x-if="step.id === 1">
+              <div class="p-4 space-y-5">
+
+                <!-- Tabs -->
+                <div class="flex border-b border-surface-border -mx-4 px-4">
+                  <button @click="mode='manual'" :class="mode==='manual' ? 'border-b-2 border-brand text-white' : 'text-gray-500 hover:text-gray-300'" class="flex-1 pb-2.5 text-xs font-medium transition-colors">✏️ &nbsp;Enter Keywords</button>
+                  <button @click="mode='url'" :class="mode==='url' ? 'border-b-2 border-brand text-white' : 'text-gray-500 hover:text-gray-300'" class="flex-1 pb-2.5 text-xs font-medium transition-colors">🤖 &nbsp;AI Suggest from URL</button>
+                </div>
+
+                <!-- Manual mode -->
+                <div x-show="mode === 'manual'" x-transition>
+                  <label class="block text-xs font-medium text-gray-500 uppercase tracking-widest mb-2">Seed Keywords</label>
+                  <div
+                    class="min-h-[48px] bg-surface border border-surface-border rounded-xl px-3 py-2 flex flex-wrap gap-2 cursor-text focus-within:ring-2 focus-within:ring-brand/50 transition"
+                    @click="$refs.kwInput.focus()"
+                  >
+                    <template x-for="(kw, i) in keywords" :key="i">
+                      <span class="inline-flex items-center gap-1 bg-brand/20 text-brand-light border border-brand/30 rounded-lg px-2.5 py-1 text-xs font-medium">
+                        <span x-text="kw"></span>
+                        <button @click.stop="removeKeyword(i)" class="text-brand/50 hover:text-brand-light ml-0.5 transition">
+                          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                      </span>
+                    </template>
+                    <input x-ref="kwInput" x-model="currentInput"
+                      @keydown.enter.prevent="addKeyword"
+                      @keydown.comma.prevent="addKeyword"
+                      @keydown.backspace="handleBackspace"
+                      placeholder="Type keyword and press Enter..."
+                      class="flex-1 min-w-[160px] bg-transparent outline-none text-sm text-white placeholder-gray-700 py-1"
+                    />
+                  </div>
+                  <p class="text-xs text-gray-700 mt-1.5">Press <kbd class="bg-surface border border-surface-border px-1 py-0.5 rounded text-gray-500 text-xs">Enter</kbd> or <kbd class="bg-surface border border-surface-border px-1 py-0.5 rounded text-gray-500 text-xs">,</kbd> to add</p>
+                </div>
+
+                <!-- URL mode -->
+                <div x-show="mode === 'url'" x-transition class="space-y-4">
+                  <div>
+                    <label class="block text-xs font-medium text-gray-500 uppercase tracking-widest mb-2">Competitor URL</label>
+                    <div class="flex gap-2">
+                      <input x-model="urlInput" @keydown.enter.prevent="analyzeUrl"
+                        placeholder="https://competitor.com/..."
+                        class="flex-1 bg-surface border border-surface-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-700 outline-none focus:ring-2 focus:ring-brand/50 transition"
+                      />
+                      <button @click="analyzeUrl" :disabled="analyzingUrl || !urlInput"
+                        class="px-4 py-2.5 bg-brand hover:bg-brand-dark disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-sm font-medium text-white transition-colors shrink-0 flex items-center gap-2"
+                      >
+                        <span x-show="!analyzingUrl">Analyze</span>
+                        <span x-show="analyzingUrl" class="flex items-center gap-2">
+                          <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                          Analyzing...
+                        </span>
+                      </button>
+                    </div>
+                    <p x-show="urlError" x-text="urlError" class="text-red-400 text-xs mt-1.5"></p>
+                  </div>
+                  <div x-show="suggestedKeywords.length > 0" x-transition class="space-y-3">
+                    <div class="flex items-center justify-between">
+                      <label class="text-xs font-medium text-gray-500 uppercase tracking-widest">Suggestions</label>
+                      <button @click="selectAllSuggested" class="text-xs text-brand hover:text-brand-light transition">
+                        <span x-text="selectedSuggested.length === suggestedKeywords.length ? 'Deselect all' : 'Select all'"></span>
+                      </button>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                      <template x-for="(kw, i) in suggestedKeywords" :key="i">
+                        <button @click="toggleSuggested(i)"
+                          :class="selectedSuggested.includes(i) ? 'bg-brand/20 border-brand/50 text-brand-light' : 'bg-surface border-surface-border text-gray-400 hover:border-gray-500 hover:text-gray-200'"
+                          class="border rounded-lg px-2.5 py-1 text-xs font-medium transition-all"
+                        >
+                          <span x-show="selectedSuggested.includes(i)" class="mr-0.5 text-brand">✓</span>
+                          <span x-text="kw"></span>
+                        </button>
+                      </template>
+                    </div>
+                    <button @click="addSuggestedKeywords" :disabled="selectedSuggested.length === 0"
+                      class="w-full py-2 border border-brand/40 hover:border-brand text-brand hover:text-white hover:bg-brand/20 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl text-xs font-medium transition-all"
+                    >
+                      Add <span x-text="selectedSuggested.length"></span> to my list →
+                    </button>
+                  </div>
+                  <!-- Current keywords list in URL mode -->
+                  <div x-show="keywords.length > 0" class="border-t border-surface-border pt-3">
+                    <label class="text-xs font-medium text-gray-500 uppercase tracking-widest mb-2 block">My List (<span x-text="keywords.length"></span>)</label>
+                    <div class="flex flex-wrap gap-1.5">
+                      <template x-for="(kw, i) in keywords" :key="i">
+                        <span class="inline-flex items-center gap-1 bg-brand/20 text-brand-light border border-brand/30 rounded-lg px-2.5 py-1 text-xs font-medium">
+                          <span x-text="kw"></span>
+                          <button @click="removeKeyword(i)" class="text-brand/50 hover:text-brand-light ml-0.5 transition">
+                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                          </button>
+                        </span>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Run Step 1 -->
+                <button @click="runStep(1)" :disabled="steps[0].status === 'running' || keywords.length === 0"
+                  class="w-full py-3 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2"
+                  :class="keywords.length === 0
+                    ? 'bg-surface border border-surface-border text-gray-600 cursor-not-allowed'
+                    : steps[0].status === 'running'
+                      ? 'bg-brand/60 text-white cursor-wait'
+                      : 'bg-brand hover:bg-brand-dark text-white glow'"
+                >
+                  <template x-if="steps[0].status !== 'running'">
+                    <span class="flex items-center gap-2">
+                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                      Run Keyword Research
+                    </span>
+                  </template>
+                  <template x-if="steps[0].status === 'running'">
+                    <span class="flex items-center gap-2">
+                      <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                      Fetching ideas & clustering...
+                    </span>
+                  </template>
+                </button>
+
+                <!-- Step 1 results (clusters) -->
+                <div x-show="steps[0].output" x-transition class="space-y-3 pt-1">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-gray-500 uppercase tracking-widest">Keyword Clusters</span>
+                    <span class="text-xs text-gray-600" x-text="`${steps[0].output?.clusters?.length || 0} clusters`"></span>
+                  </div>
+                  <template x-for="(cluster, ci) in steps[0].output?.clusters || []" :key="ci">
+                    <div class="border rounded-xl overflow-hidden" :class="cluster.is_top_target ? 'border-brand/50' : 'border-surface-border'">
+                      <div class="p-3 cursor-pointer flex items-start gap-3 justify-between" :class="cluster.is_top_target ? 'bg-brand/5' : ''" @click="toggleCluster(ci)">
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-center gap-1.5 flex-wrap mb-0.5">
+                            <span x-show="cluster.is_top_target" class="text-xs font-semibold text-brand-light bg-brand/20 border border-brand/30 px-2 py-0.5 rounded-full">⭐ Top</span>
+                            <span class="text-xs text-gray-500 capitalize" x-text="cluster.intent"></span>
+                          </div>
+                          <p class="text-sm font-medium text-white" x-text="cluster.primary_keyword"></p>
+                          <p class="text-xs text-gray-600 mt-0.5">
+                            <span x-text="(cluster.avg_monthly_searches || 0).toLocaleString()"></span>/mo ·
+                            <span x-text="`${cluster.opportunity_score || 0}/100`"></span> score
+                          </p>
+                        </div>
+                        <div class="text-right shrink-0">
+                          <div class="text-base font-bold" :class="(cluster.opportunity_score||0) >= 70 ? 'text-green-400' : (cluster.opportunity_score||0) >= 40 ? 'text-yellow-400' : 'text-gray-500'" x-text="cluster.opportunity_score"></div>
+                          <svg class="w-3.5 h-3.5 text-gray-600 ml-auto mt-1 transition-transform" :class="openClusters.includes(ci) ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                        </div>
+                      </div>
+                      <div x-show="openClusters.includes(ci)" x-transition class="border-t border-surface-border px-3 py-3 space-y-3 text-xs">
+                        <div x-show="cluster.supporting_keywords?.length">
+                          <p class="text-gray-600 uppercase tracking-widest mb-1.5">Supporting</p>
+                          <div class="flex flex-wrap gap-1">
+                            <template x-for="kw in cluster.supporting_keywords" :key="kw">
+                              <span class="bg-surface border border-surface-border text-gray-400 rounded px-2 py-0.5" x-text="kw"></span>
+                            </template>
+                          </div>
+                        </div>
+                        <div x-show="cluster.paa_questions?.length">
+                          <p class="text-gray-600 uppercase tracking-widest mb-1.5">People Also Ask</p>
+                          <ul class="space-y-1">
+                            <template x-for="q in cluster.paa_questions" :key="q">
+                              <li class="text-gray-300 flex items-start gap-1.5"><span class="text-brand shrink-0">?</span><span x-text="q"></span></li>
+                            </template>
+                          </ul>
+                        </div>
+                        <button @click="useCluster(cluster)" class="w-full py-1.5 border border-brand/40 hover:border-brand hover:bg-brand/10 text-brand-light rounded-lg transition-all">Use this cluster →</button>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+
               </div>
-            </div>
+            </template>
 
-            <!-- PAA questions -->
-            <div x-show="cluster.paa_questions?.length">
-              <p class="text-xs text-gray-500 uppercase tracking-widest mb-2">People Also Ask</p>
-              <ul class="space-y-1.5">
-                <template x-for="q in cluster.paa_questions" :key="q">
-                  <li class="text-sm text-gray-300 flex items-start gap-2">
-                    <span class="text-brand shrink-0 mt-0.5">?</span>
-                    <span x-text="q"></span>
-                  </li>
-                </template>
-              </ul>
-            </div>
+            <!-- Steps 2–12: generic output view -->
+            <template x-if="step.id !== 1">
+              <div class="p-4 space-y-3">
+                <p class="text-xs text-gray-500" x-text="stepDescription(step.id)"></p>
+                <div x-show="step.status === 'error'" class="bg-red-500/10 border border-red-500/30 rounded-xl p-3">
+                  <p class="text-red-400 text-xs font-mono" x-text="step.error"></p>
+                </div>
+                <div x-show="step.output" x-transition class="bg-surface border border-surface-border rounded-xl overflow-auto max-h-80">
+                  <pre class="text-xs text-gray-300 p-3" x-text="JSON.stringify(step.output, null, 2)"></pre>
+                </div>
+              </div>
+            </template>
 
-            <!-- Use this cluster -->
-            <button
-              @click="useCluster(cluster)"
-              class="w-full py-2 border border-brand/40 hover:border-brand hover:bg-brand/10 text-brand-light text-sm font-medium rounded-lg transition-all"
-            >
-              Use this cluster →
-            </button>
           </div>
         </div>
-      </template>
 
-    </div>
-
+      </div>
+    </template>
   </div>
 
-  <script>
-    function app() {
-      return {
-        mode: 'manual',
-        keywords: [],
-        currentInput: '',
-        urlInput: '',
-        urlError: '',
-        analyzingUrl: false,
-        suggestedKeywords: [],
-        selectedSuggested: [],
-        running: false,
-        runError: '',
-        results: null,
-        openClusters: [],
+</div>
 
-        addKeyword() {
-          const kw = this.currentInput.trim().replace(/,$/, '');
-          if (kw && !this.keywords.includes(kw)) {
-            this.keywords.push(kw);
+<script>
+const STEP_META = [
+  { id: 1,  label: 'Keyword Expansion',    desc: 'Fetches keyword ideas from Google Ads API, clusters by intent, and scores opportunities.' },
+  { id: 2,  label: 'SERP Intelligence',    desc: 'Scrapes search results for seed keywords to understand who ranks and why.' },
+  { id: 3,  label: 'Competitor Analysis',  desc: 'Deep-reads competitor pages to extract content strategies, word counts, and gaps.' },
+  { id: 4,  label: 'Content Blueprint',    desc: 'Designs a comprehensive article structure that outranks the competition.' },
+  { id: 5,  label: 'Deep Write',           desc: 'Writes the full article — draft, review, and revision — targeting 2,000+ words.' },
+  { id: 6,  label: 'SEO Optimization',     desc: 'Inserts keywords, writes meta title/description, and scores on-page SEO.' },
+  { id: 7,  label: 'Media Generation',     desc: 'Generates featured image and section images via AI.' },
+  { id: 8,  label: 'Internal Linking',     desc: 'Injects contextual internal links from existing Cycolaps posts.' },
+  { id: 9,  label: 'Technical SEO',        desc: 'Builds canonical URL, OG tags, XML sitemap entry, and JSON-LD schemas.' },
+  { id: 10, label: 'Publish',              desc: 'Upserts the post to Cycolaps Neon DB and returns the live URL.' },
+  { id: 11, label: 'Amplify & Distribute', desc: 'Drafts social posts for Twitter, LinkedIn, Reddit, Bluesky, and newsletter.' },
+  { id: 12, label: 'Track & Report',       desc: 'Logs keyword tracking rows and captures GSC baseline rankings.' },
+];
+
+function app() {
+  return {
+    steps: STEP_META.map(m => ({ ...m, status: 'idle', output: null, error: null, summary: null })),
+    openStep: 1,
+    openClusters: [],
+    runningAll: false,
+    allDone: false,
+
+    // Step 1 input state
+    mode: 'manual',
+    keywords: [],
+    currentInput: '',
+    urlInput: '',
+    urlError: '',
+    analyzingUrl: false,
+    suggestedKeywords: [],
+    selectedSuggested: [],
+
+    async init() {
+      try {
+        const res = await fetch('/api/status');
+        const status = await res.json();
+        for (const step of this.steps) {
+          if (status[String(step.id)]) {
+            step.status = 'done';
+            step.summary = 'checkpoint loaded';
           }
-          this.currentInput = '';
-        },
-
-        removeKeyword(i) {
-          this.keywords.splice(i, 1);
-        },
-
-        handleBackspace() {
-          if (!this.currentInput && this.keywords.length) {
-            this.keywords.pop();
-          }
-        },
-
-        async analyzeUrl() {
-          if (!this.urlInput || this.analyzingUrl) return;
-          this.analyzingUrl = true;
-          this.urlError = '';
-          this.suggestedKeywords = [];
-          this.selectedSuggested = [];
-
-          try {
-            const res = await fetch('/api/suggest-keywords', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ url: this.urlInput }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'Failed to analyze URL');
-            this.suggestedKeywords = data.keywords || [];
-            this.selectedSuggested = this.suggestedKeywords.map((_, i) => i); // select all by default
-          } catch (e) {
-            this.urlError = e.message;
-          } finally {
-            this.analyzingUrl = false;
-          }
-        },
-
-        toggleSuggested(i) {
-          const idx = this.selectedSuggested.indexOf(i);
-          if (idx === -1) this.selectedSuggested.push(i);
-          else this.selectedSuggested.splice(idx, 1);
-        },
-
-        selectAllSuggested() {
-          if (this.selectedSuggested.length === this.suggestedKeywords.length) {
-            this.selectedSuggested = [];
-          } else {
-            this.selectedSuggested = this.suggestedKeywords.map((_, i) => i);
-          }
-        },
-
-        addSuggestedKeywords() {
-          this.selectedSuggested.forEach(i => {
-            const kw = this.suggestedKeywords[i];
-            if (kw && !this.keywords.includes(kw)) this.keywords.push(kw);
-          });
-          this.mode = 'manual';
-        },
-
-        async runStep1() {
-          if (this.running || !this.keywords.length) return;
-          this.running = true;
-          this.runError = '';
-          this.results = null;
-          this.openClusters = [];
-
-          try {
-            const res = await fetch('/api/run/step1', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ keywords: this.keywords }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'Step 1 failed');
-            this.results = data.data;
-            // Auto-open the top target cluster
-            const topIdx = (this.results?.clusters || []).findIndex(c => c.is_top_target);
-            if (topIdx >= 0) this.openClusters.push(topIdx);
-            // Scroll to results
-            this.$nextTick(() => {
-              document.querySelector('[x-show="results"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            });
-          } catch (e) {
-            this.runError = e.message;
-          } finally {
-            this.running = false;
-          }
-        },
-
-        toggleCluster(i) {
-          const idx = this.openClusters.indexOf(i);
-          if (idx === -1) this.openClusters.push(i);
-          else this.openClusters.splice(idx, 1);
-        },
-
-        useCluster(cluster) {
-          // Populate keywords with this cluster's keywords for the next pipeline run
-          const allKws = [cluster.primary_keyword, ...(cluster.supporting_keywords || [])];
-          allKws.forEach(kw => { if (!this.keywords.includes(kw)) this.keywords.push(kw); });
-          window.scrollTo({ top: 0, behavior: 'smooth' });
         }
+        this.allDone = this.steps.every(s => s.status === 'done');
+      } catch (_) {}
+    },
+
+    stepDescription(id) {
+      return STEP_META.find(m => m.id === id)?.desc || '';
+    },
+
+    toggleStep(id) {
+      this.openStep = this.openStep === id ? null : id;
+    },
+
+    toggleCluster(i) {
+      const idx = this.openClusters.indexOf(i);
+      if (idx === -1) this.openClusters.push(i);
+      else this.openClusters.splice(idx, 1);
+    },
+
+    useCluster(cluster) {
+      const kws = [cluster.primary_keyword, ...(cluster.supporting_keywords || [])];
+      kws.forEach(kw => { if (!this.keywords.includes(kw)) this.keywords.push(kw); });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+
+    // ── Keyword input helpers ───────────────────────────────────────────────
+
+    addKeyword() {
+      const kw = this.currentInput.trim().replace(/,$/, '');
+      if (kw && !this.keywords.includes(kw)) this.keywords.push(kw);
+      this.currentInput = '';
+    },
+
+    removeKeyword(i) { this.keywords.splice(i, 1); },
+
+    handleBackspace() {
+      if (!this.currentInput && this.keywords.length) this.keywords.pop();
+    },
+
+    async analyzeUrl() {
+      if (!this.urlInput || this.analyzingUrl) return;
+      this.analyzingUrl = true;
+      this.urlError = '';
+      this.suggestedKeywords = [];
+      this.selectedSuggested = [];
+      try {
+        const res = await fetch('/api/suggest-keywords', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: this.urlInput }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to analyze URL');
+        this.suggestedKeywords = data.keywords || [];
+        this.selectedSuggested = this.suggestedKeywords.map((_, i) => i);
+      } catch (e) {
+        this.urlError = e.message;
+      } finally {
+        this.analyzingUrl = false;
       }
-    }
-  </script>
+    },
+
+    toggleSuggested(i) {
+      const idx = this.selectedSuggested.indexOf(i);
+      if (idx === -1) this.selectedSuggested.push(i);
+      else this.selectedSuggested.splice(idx, 1);
+    },
+
+    selectAllSuggested() {
+      this.selectedSuggested = this.selectedSuggested.length === this.suggestedKeywords.length
+        ? []
+        : this.suggestedKeywords.map((_, i) => i);
+    },
+
+    addSuggestedKeywords() {
+      this.selectedSuggested.forEach(i => {
+        const kw = this.suggestedKeywords[i];
+        if (kw && !this.keywords.includes(kw)) this.keywords.push(kw);
+      });
+      this.mode = 'manual';
+    },
+
+    // ── Step runner ─────────────────────────────────────────────────────────
+
+    async runStep(id) {
+      const step = this.steps.find(s => s.id === id);
+      if (!step || step.status === 'running') return;
+
+      step.status = 'running';
+      step.error = null;
+      step.output = null;
+      step.summary = null;
+
+      try {
+        let res;
+        if (id === 1) {
+          if (!this.keywords.length) { step.status = 'idle'; return; }
+          res = await fetch('/api/run/step1', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ keywords: this.keywords }),
+          });
+        } else {
+          res = await fetch(`/api/run/step${id}`, { method: 'POST' });
+        }
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || `Step ${id} failed`);
+
+        step.output = data.data;
+        step.status = 'done';
+        step.summary = this.makeSummary(id, data.data);
+
+        if (id === 1) {
+          const topIdx = (data.data?.clusters || []).findIndex(c => c.is_top_target);
+          if (topIdx >= 0) this.openClusters = [topIdx];
+        }
+
+        this.allDone = this.steps.every(s => s.status === 'done');
+
+      } catch (e) {
+        step.status = 'error';
+        step.error = e.message;
+      }
+    },
+
+    makeSummary(id, data) {
+      if (!data) return null;
+      switch (id) {
+        case 1:  return `${data.clusters?.length || 0} clusters · ${data.total_ideas_fetched || 0} ideas`;
+        case 2:  return `${data.results?.length || Object.keys(data).length || '—'} SERP entries`;
+        case 3:  return `${data.competitors?.length || '—'} competitors analyzed`;
+        case 4:  return `Blueprint: ${data.title || data.working_title || '—'}`;
+        case 5:  return `${data.word_count || '—'} words written`;
+        case 6:  return `SEO score: ${data.seo_score || '—'} · ${data.meta_title ? 'meta ready' : '—'}`;
+        case 7:  return `${(data.image_urls || []).length} images generated`;
+        case 8:  return `${(data.internal_links_injected || data.links_added || 0)} links injected`;
+        case 9:  return `Schema: ${data.schema_types?.join(', ') || 'ready'} · canonical set`;
+        case 10: return `Published: ${data.published_url || data || '—'}`;
+        case 11: return `${Object.keys(data.posts || data || {}).length} social posts drafted`;
+        case 12: return `${data.keywords_tracked || '—'} keywords tracked`;
+        default: return 'done';
+      }
+    },
+
+    async runAll() {
+      if (this.runningAll || this.steps[0].status !== 'done') return;
+      this.runningAll = true;
+      for (let id = 2; id <= 12; id++) {
+        this.openStep = id;
+        await this.runStep(id);
+        if (this.steps[id - 1].status === 'error') break;
+      }
+      this.runningAll = false;
+    },
+
+    resetAll() {
+      for (const step of this.steps) {
+        step.status = 'idle';
+        step.output = null;
+        step.error = null;
+        step.summary = null;
+      }
+      this.keywords = [];
+      this.suggestedKeywords = [];
+      this.selectedSuggested = [];
+      this.openClusters = [];
+      this.allDone = false;
+      this.openStep = 1;
+    },
+  }
+}
+</script>
 
 </body>
 </html>
