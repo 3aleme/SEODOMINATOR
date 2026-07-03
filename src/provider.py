@@ -66,9 +66,9 @@ class _AnthropicMessages:
     def __init__(self, client):
         self._c = client
 
-    def create(self, *, model: str, system, messages, max_tokens: int, **kwargs):
+    def create(self, *, model: str, system=None, messages, max_tokens: int, **kwargs):
         return self._c.messages.create(
-            model=model, system=system, messages=messages,
+            model=model, system=system or [], messages=messages,
             max_tokens=max_tokens, **kwargs
         )
 
@@ -88,8 +88,10 @@ class _OpenAICompatMessages:
             return blocks
         return "\n".join(b.get("text", "") for b in blocks if isinstance(b, dict))
 
-    def create(self, *, model: str, system, messages, max_tokens: int, **kwargs):
-        oai_msgs = [{"role": "system", "content": self._to_text(system)}]
+    def create(self, *, model: str, system=None, messages, max_tokens: int, **kwargs):
+        oai_msgs = []
+        if system:
+            oai_msgs.append({"role": "system", "content": self._to_text(system)})
         for msg in messages:
             oai_msgs.append({"role": msg["role"], "content": self._to_text(msg["content"])})
         # Pass through supported OpenAI params (temperature, top_p, etc.)
