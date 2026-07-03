@@ -96,83 +96,65 @@ class Step11Publish:
         media: Optional[dict],
         slug: str,
         published_url: str,
-    ) -> Optional[int]:
-        now = datetime.now(timezone.utc).isoformat()
+    ) -> Optional[str]:
+        now = datetime.now(timezone.utc)
         m = media or {}
-        hero_image_url = linked_article.get("hero_image_url") or m.get("hero_image_url", "/blog/ai.png")
-        hero_alt_text = linked_article.get("hero_alt_text") or m.get("hero_alt_text", "")
 
-        content = linked_article.get("content", "")
-        title = linked_article.get("seo_title", "")
-        meta_desc = linked_article.get("meta_description", "")
-        tags = json.dumps(linked_article.get("seo_tags", []))
-        word_count = linked_article.get("word_count", 0)
-        keyword_density = linked_article.get("keyword_density", 0.0)
+        content   = linked_article.get("content", "")
+        title     = linked_article.get("seo_title") or seo_output.get("seo_title", "")
+        meta_desc = linked_article.get("meta_description") or seo_output.get("meta_description", "")
+        tags      = linked_article.get("seo_tags") or seo_output.get("seo_tags", [])
+        image     = linked_article.get("hero_image_url") or m.get("hero_image_url") or "/blog/ai.png"
+        category  = linked_article.get("primary_keyword") or seo_output.get("primary_keyword") or "AI"
+        word_count = linked_article.get("word_count") or seo_output.get("word_count") or 0
 
-        og_tags = json.dumps(tech_seo.get("og_tags", {}))
-        twitter_tags = json.dumps(tech_seo.get("twitter_tags", {}))
-        canonical_url = tech_seo.get("canonical_url", published_url)
-        json_ld_article = json.dumps(tech_seo.get("json_ld_article", {}))
-        json_ld_faq = json.dumps(tech_seo.get("json_ld_faq", {}))
+        excerpt   = _extract_excerpt(content)
+        read_time = f"{max(1, round(word_count / 200))} min read"
 
-        excerpt = _extract_excerpt(content)
+        # Merge article + FAQ schemas into a single jsonb value
+        json_ld = linked_article.get("json_ld") or tech_seo.get("json_ld_article") or {}
+        faq     = linked_article.get("faq_schema") or tech_seo.get("json_ld_faq")
+        if faq:
+            json_ld = {"article": json_ld, "faq": faq}
 
         sql = """
             INSERT INTO posts (
                 slug, title, content, excerpt, meta_description,
-                seo_title, tags, hero_image_url, hero_alt_text,
-                canonical_url, og_tags, twitter_tags,
-                json_ld_article, json_ld_faq,
-                word_count, keyword_density,
-                published, date, updated_at
+                image, tags, json_ld,
+                category, read_time, published, date, updated_at
             )
             VALUES (
                 %(slug)s, %(title)s, %(content)s, %(excerpt)s, %(meta_description)s,
-                %(seo_title)s, %(tags)s, %(hero_image_url)s, %(hero_alt_text)s,
-                %(canonical_url)s, %(og_tags)s, %(twitter_tags)s,
-                %(json_ld_article)s, %(json_ld_faq)s,
-                %(word_count)s, %(keyword_density)s,
-                TRUE, %(date)s, %(updated_at)s
+                %(image)s, %(tags)s, %(json_ld)s,
+                %(category)s, %(read_time)s, TRUE, %(date)s, %(updated_at)s
             )
             ON CONFLICT (slug) DO UPDATE SET
-                title           = EXCLUDED.title,
-                content         = EXCLUDED.content,
-                excerpt         = EXCLUDED.excerpt,
+                title            = EXCLUDED.title,
+                content          = EXCLUDED.content,
+                excerpt          = EXCLUDED.excerpt,
                 meta_description = EXCLUDED.meta_description,
-                seo_title       = EXCLUDED.seo_title,
-                tags            = EXCLUDED.tags,
-                hero_image_url  = EXCLUDED.hero_image_url,
-                hero_alt_text   = EXCLUDED.hero_alt_text,
-                canonical_url   = EXCLUDED.canonical_url,
-                og_tags         = EXCLUDED.og_tags,
-                twitter_tags    = EXCLUDED.twitter_tags,
-                json_ld_article = EXCLUDED.json_ld_article,
-                json_ld_faq     = EXCLUDED.json_ld_faq,
-                word_count      = EXCLUDED.word_count,
-                keyword_density = EXCLUDED.keyword_density,
-                published       = TRUE,
-                updated_at      = EXCLUDED.updated_at
-            RETURNING id
+                image            = EXCLUDED.image,
+                tags             = EXCLUDED.tags,
+                json_ld          = EXCLUDED.json_ld,
+                category         = EXCLUDED.category,
+                read_time        = EXCLUDED.read_time,
+                published        = TRUE,
+                updated_at       = EXCLUDED.updated_at
+            RETURNING slug
         """
         params = {
-            "slug": slug,
-            "title": title,
-            "content": content,
-            "excerpt": excerpt,
+            "slug":             slug,
+            "title":            title,
+            "content":          content,
+            "excerpt":          excerpt,
             "meta_description": meta_desc,
-            "seo_title": title,
-            "tags": tags,
-            "hero_image_url": hero_image_url,
-            "hero_alt_text": hero_alt_text,
-            "canonical_url": canonical_url,
-            "og_tags": og_tags,
-            "twitter_tags": twitter_tags,
-            "json_ld_article": json_ld_article,
-            "json_ld_faq": json_ld_faq,
-            "word_count": word_count,
-            "keyword_density": keyword_density,
-            "date": now,
-            "updated_at": now,
+            "image":            image,
+            "tags":             tags,
+            "json_ld":          psycopg2.extras.Json(json_ld) if json_ld else None,
+            "category":         category,
+            "read_time":        read_time,
+            "date":             now.strftime("%Y-%m-%d"),
+            "updated_at":       now,
         }
 
         try:
@@ -181,13 +163,13 @@ class Step11Publish:
                 with conn.cursor() as cur:
                     cur.execute(sql, params)
                     row = cur.fetchone()
-                    post_id = row[0] if row else None
+                    returned_slug = row[0] if row else None
             conn.close()
-            logger.info(f"Upserted post id={post_id} slug='{slug}' to Cycolaps DB.")
-            return post_id
+            logger.info(f"Upserted post slug='{returned_slug}' to Cycolaps DB.")
+            return returned_slug
         except Exception as exc:
             logger.error(f"Cycolaps DB upsert failed: {exc}")
-            return None
+            raise
 
     def _apply_backward_links(self, db_url: str, backward_updates: list) -> int:
         """

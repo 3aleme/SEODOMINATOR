@@ -169,27 +169,71 @@
           <!-- Step body (expanded) -->
           <div x-show="openStep === step.id" x-transition class="border-t border-surface-border">
 
-            <!-- Step 1: keyword input -->
+            <!-- Step 1: unified input -->
             <template x-if="step.id === 1">
-              <div class="p-4 space-y-5">
+              <div class="p-4 space-y-4">
 
-                <!-- Tabs -->
-                <div class="flex border-b border-surface-border -mx-4 px-4">
-                  <button @click="mode='manual'" :class="mode==='manual' ? 'border-b-2 border-brand text-white' : 'text-gray-500 hover:text-gray-300'" class="flex-1 pb-2.5 text-xs font-medium transition-colors">✏️ &nbsp;Enter Keywords</button>
-                  <button @click="mode='url'" :class="mode==='url' ? 'border-b-2 border-brand text-white' : 'text-gray-500 hover:text-gray-300'" class="flex-1 pb-2.5 text-xs font-medium transition-colors">🤖 &nbsp;AI Suggest from URL</button>
+                <!-- URL input (agent-fillable or manual) -->
+                <div>
+                  <label class="block text-xs font-medium text-gray-500 uppercase tracking-widest mb-2">Competitor URL <span class="text-gray-700 normal-case tracking-normal font-normal">— optional, Agent can fill this</span></label>
+                  <div class="flex gap-2">
+                    <input x-model="urlInput" @keydown.enter.prevent="analyzeUrl"
+                      placeholder="https://competitor.com/..."
+                      class="flex-1 bg-surface border border-surface-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-700 outline-none focus:ring-2 focus:ring-brand/50 transition"
+                    />
+                    <button @click="analyzeUrl" :disabled="analyzingUrl || !urlInput"
+                      class="px-4 py-2.5 bg-brand hover:bg-brand-dark disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-sm font-medium text-white transition-colors shrink-0 flex items-center gap-2"
+                    >
+                      <span x-show="!analyzingUrl">Analyze</span>
+                      <span x-show="analyzingUrl" class="flex items-center gap-2">
+                        <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                        Analyzing...
+                      </span>
+                    </button>
+                  </div>
+                  <p x-show="urlError" x-text="urlError" class="text-red-400 text-xs mt-1.5"></p>
                 </div>
 
-                <!-- Manual mode -->
-                <div x-show="mode === 'manual'" x-transition>
-                  <label class="block text-xs font-medium text-gray-500 uppercase tracking-widest mb-2">Seed Keywords</label>
+                <!-- Keywords tag input (always visible) -->
+                <div>
+                  <label class="block text-xs font-medium text-gray-500 uppercase tracking-widest mb-2">Keywords</label>
                   <div
                     class="min-h-[48px] bg-surface border border-surface-border rounded-xl px-3 py-2 flex flex-wrap gap-2 cursor-text focus-within:ring-2 focus-within:ring-brand/50 transition"
-                    @click="$refs.kwInput.focus()"
+                    @click="if (!$event.target.closest('[data-tag]')) $refs.kwInput.focus()"
                   >
                     <template x-for="(kw, i) in keywords" :key="i">
-                      <span class="inline-flex items-center gap-1 bg-brand/20 text-brand-light border border-brand/30 rounded-lg px-2.5 py-1 text-xs font-medium">
-                        <span x-text="kw"></span>
-                        <button @click.stop="removeKeyword(i)" class="text-brand/50 hover:text-brand-light ml-0.5 transition">
+                      <span
+                        data-tag
+                        tabindex="0"
+                        @focus="focusedTag = i"
+                        @blur="focusedTag = null"
+                        @dblclick.stop="startEditTag(i)"
+                        @keydown.left.prevent="navigateTag(i, -1)"
+                        @keydown.right.prevent="navigateTag(i, 1)"
+                        @keydown.delete.prevent="deleteTag(i)"
+                        @keydown.backspace.prevent="deleteTag(i)"
+                        @keydown.enter.prevent="startEditTag(i)"
+                        @keydown.escape.prevent="$refs.kwInput.focus()"
+                        class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition-all cursor-default select-none outline-none"
+                        :class="editingTag === i || focusedTag === i
+                          ? 'bg-brand/30 text-brand-light border border-brand/60 ring-1 ring-brand/40'
+                          : 'bg-brand/20 text-brand-light border border-brand/30 hover:border-brand/50'"
+                      >
+                        <template x-if="editingTag !== i">
+                          <span x-text="kw"></span>
+                        </template>
+                        <template x-if="editingTag === i">
+                          <input
+                            x-model="editingValue"
+                            x-init="$el.focus(); $el.select()"
+                            @keydown="handleTagEditKeydown(i, $event)"
+                            @blur="commitEditTag(i)"
+                            @click.stop
+                            class="bg-transparent outline-none text-brand-light"
+                            :style="`width: ${Math.max(editingValue.length, 3)}ch`"
+                          />
+                        </template>
+                        <button @click.stop="removeKeyword(i)" class="text-brand/50 hover:text-brand-light ml-0.5 transition shrink-0">
                           <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
                       </span>
@@ -198,72 +242,12 @@
                       @keydown.enter.prevent="addKeyword"
                       @keydown.comma.prevent="addKeyword"
                       @keydown.backspace="handleBackspace"
+                      @keydown.left="if (!currentInput) navigateTag(keywords.length, -1)"
                       placeholder="Type keyword and press Enter..."
                       class="flex-1 min-w-[160px] bg-transparent outline-none text-sm text-white placeholder-gray-700 py-1"
                     />
                   </div>
                   <p class="text-xs text-gray-700 mt-1.5">Press <kbd class="bg-surface border border-surface-border px-1 py-0.5 rounded text-gray-500 text-xs">Enter</kbd> or <kbd class="bg-surface border border-surface-border px-1 py-0.5 rounded text-gray-500 text-xs">,</kbd> to add</p>
-                </div>
-
-                <!-- URL mode -->
-                <div x-show="mode === 'url'" x-transition class="space-y-4">
-                  <div>
-                    <label class="block text-xs font-medium text-gray-500 uppercase tracking-widest mb-2">Competitor URL</label>
-                    <div class="flex gap-2">
-                      <input x-model="urlInput" @keydown.enter.prevent="analyzeUrl"
-                        placeholder="https://competitor.com/..."
-                        class="flex-1 bg-surface border border-surface-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-700 outline-none focus:ring-2 focus:ring-brand/50 transition"
-                      />
-                      <button @click="analyzeUrl" :disabled="analyzingUrl || !urlInput"
-                        class="px-4 py-2.5 bg-brand hover:bg-brand-dark disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-sm font-medium text-white transition-colors shrink-0 flex items-center gap-2"
-                      >
-                        <span x-show="!analyzingUrl">Analyze</span>
-                        <span x-show="analyzingUrl" class="flex items-center gap-2">
-                          <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                          Analyzing...
-                        </span>
-                      </button>
-                    </div>
-                    <p x-show="urlError" x-text="urlError" class="text-red-400 text-xs mt-1.5"></p>
-                  </div>
-                  <div x-show="suggestedKeywords.length > 0" x-transition class="space-y-3">
-                    <div class="flex items-center justify-between">
-                      <label class="text-xs font-medium text-gray-500 uppercase tracking-widest">Suggestions</label>
-                      <button @click="selectAllSuggested" class="text-xs text-brand hover:text-brand-light transition">
-                        <span x-text="selectedSuggested.length === suggestedKeywords.length ? 'Deselect all' : 'Select all'"></span>
-                      </button>
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                      <template x-for="(kw, i) in suggestedKeywords" :key="i">
-                        <button @click="toggleSuggested(i)"
-                          :class="selectedSuggested.includes(i) ? 'bg-brand/20 border-brand/50 text-brand-light' : 'bg-surface border-surface-border text-gray-400 hover:border-gray-500 hover:text-gray-200'"
-                          class="border rounded-lg px-2.5 py-1 text-xs font-medium transition-all"
-                        >
-                          <span x-show="selectedSuggested.includes(i)" class="mr-0.5 text-brand">✓</span>
-                          <span x-text="kw"></span>
-                        </button>
-                      </template>
-                    </div>
-                    <button @click="addSuggestedKeywords" :disabled="selectedSuggested.length === 0"
-                      class="w-full py-2 border border-brand/40 hover:border-brand text-brand hover:text-white hover:bg-brand/20 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl text-xs font-medium transition-all"
-                    >
-                      Add <span x-text="selectedSuggested.length"></span> to my list →
-                    </button>
-                  </div>
-                  <!-- Current keywords list in URL mode -->
-                  <div x-show="keywords.length > 0" class="border-t border-surface-border pt-3">
-                    <label class="text-xs font-medium text-gray-500 uppercase tracking-widest mb-2 block">My List (<span x-text="keywords.length"></span>)</label>
-                    <div class="flex flex-wrap gap-1.5">
-                      <template x-for="(kw, i) in keywords" :key="i">
-                        <span class="inline-flex items-center gap-1 bg-brand/20 text-brand-light border border-brand/30 rounded-lg px-2.5 py-1 text-xs font-medium">
-                          <span x-text="kw"></span>
-                          <button @click="removeKeyword(i)" class="text-brand/50 hover:text-brand-light ml-0.5 transition">
-                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                          </button>
-                        </span>
-                      </template>
-                    </div>
-                  </div>
                 </div>
 
                 <!-- Run Step 1 -->
@@ -438,14 +422,14 @@ function app() {
     allDone: false,
 
     // Step 1 input state
-    mode: 'manual',
+    focusedTag: null,
+    editingTag: null,
+    editingValue: '',
     keywords: [],
     currentInput: '',
     urlInput: '',
     urlError: '',
     analyzingUrl: false,
-    suggestedKeywords: [],
-    selectedSuggested: [],
 
     async init() {
       try {
@@ -495,12 +479,61 @@ function app() {
       if (!this.currentInput && this.keywords.length) this.keywords.pop();
     },
 
+    navigateTag(i, dir) {
+      this.$nextTick(() => {
+        const tags = document.querySelectorAll('[data-tag]');
+        const next = i + dir;
+        if (next < 0 || next >= tags.length) { this.$refs.kwInput.focus(); return; }
+        tags[next].focus();
+      });
+    },
+
+    deleteTag(i) {
+      this.editingTag = null;
+      this.keywords.splice(i, 1);
+      this.$nextTick(() => {
+        const tags = document.querySelectorAll('[data-tag]');
+        if (!tags.length) { this.$refs.kwInput.focus(); return; }
+        tags[Math.min(i, tags.length - 1)].focus();
+      });
+    },
+
+    startEditTag(i) {
+      this.editingTag = i;
+      this.editingValue = this.keywords[i];
+    },
+
+    commitEditTag(i) {
+      if (this.editingTag !== i) return;
+      const val = this.editingValue.trim();
+      this.editingTag = null;
+      this.editingValue = '';
+      if (!val) {
+        this.keywords.splice(i, 1);
+      } else if (val !== this.keywords[i] && !this.keywords.includes(val)) {
+        this.keywords.splice(i, 1, val);
+      }
+      this.$nextTick(() => {
+        const tags = document.querySelectorAll('[data-tag]');
+        if (tags[i]) tags[i].focus(); else this.$refs.kwInput.focus();
+      });
+    },
+
+    cancelEditTag() {
+      this.editingTag = null;
+      this.editingValue = '';
+    },
+
+    handleTagEditKeydown(i, e) {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); this.commitEditTag(i); }
+      else if (e.key === 'Escape') { e.preventDefault(); this.cancelEditTag(); }
+    },
+
     async analyzeUrl() {
       if (!this.urlInput || this.analyzingUrl) return;
       this.analyzingUrl = true;
       this.urlError = '';
-      this.suggestedKeywords = [];
-      this.selectedSuggested = [];
       try {
         const res = await fetch('/api/suggest-keywords', {
           method: 'POST',
@@ -509,33 +542,14 @@ function app() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed to analyze URL');
-        this.suggestedKeywords = data.keywords || [];
-        this.selectedSuggested = this.suggestedKeywords.map((_, i) => i);
+        (data.keywords || []).forEach(kw => {
+          if (kw && !this.keywords.includes(kw)) this.keywords.push(kw);
+        });
       } catch (e) {
         this.urlError = e.message;
       } finally {
         this.analyzingUrl = false;
       }
-    },
-
-    toggleSuggested(i) {
-      const idx = this.selectedSuggested.indexOf(i);
-      if (idx === -1) this.selectedSuggested.push(i);
-      else this.selectedSuggested.splice(idx, 1);
-    },
-
-    selectAllSuggested() {
-      this.selectedSuggested = this.selectedSuggested.length === this.suggestedKeywords.length
-        ? []
-        : this.suggestedKeywords.map((_, i) => i);
-    },
-
-    addSuggestedKeywords() {
-      this.selectedSuggested.forEach(i => {
-        const kw = this.suggestedKeywords[i];
-        if (kw && !this.keywords.includes(kw)) this.keywords.push(kw);
-      });
-      this.mode = 'manual';
     },
 
     // ── Step runner ─────────────────────────────────────────────────────────
@@ -621,8 +635,9 @@ function app() {
         step.summary = null;
       }
       this.keywords = [];
-      this.suggestedKeywords = [];
-      this.selectedSuggested = [];
+      this.focusedTag = null;
+      this.editingTag = null;
+      this.editingValue = '';
       this.openClusters = [];
       this.allDone = false;
       this.openStep = 1;

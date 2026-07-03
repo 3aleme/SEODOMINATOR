@@ -36,7 +36,7 @@ logger = get_logger(__name__)
 
 _OUTPUT_DIR = Path("outputs/images")
 
-_XAI_IMAGES_URL   = "https://api.x.ai/v1/images/generations"
+_XAI_IMAGES_URL    = "https://api.x.ai/v1/images/generations"
 _DALLE_URL         = "https://api.openai.com/v1/images/generations"
 _STABILITY_URL     = "https://api.stability.ai/v2beta/stable-image/generate/core"
 _GEMINI_IMG_URL    = "https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-fast-generate-001:predict"
@@ -188,7 +188,7 @@ class Step8MediaGeneration:
         resp = httpx.post(
             _XAI_IMAGES_URL,
             headers={"Authorization": f"Bearer {self._settings.xai_api_key}", "Content-Type": "application/json"},
-            json={"model": "grok-2-image", "prompt": prompt, "n": 1, "response_format": "url"},
+            json={"model": "aurora", "prompt": prompt, "n": 1, "response_format": "url"},
             timeout=60.0,
         )
         resp.raise_for_status()
