@@ -28,7 +28,7 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-class Step5DeepWrite:
+class Step6DeepWrite:
     """Three-pass article writing: Expert Draft → Quality Review → Revision."""
 
     def __init__(self, settings=None):

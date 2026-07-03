@@ -1,28 +1,18 @@
 """
-Step 1: Keyword Expansion
+Step 1: Keyword Idea Fetch
 
-Takes seed keywords → Google Ads API for keyword ideas → LLM classifies intent,
-clusters related keywords, scores opportunities, extracts PAA questions.
+Calls Google Ads Keyword Planner with seed keywords and returns raw keyword ideas
+with search volume, competition, and trend data. No LLM involved.
 
 Input:  List[str] — seed keywords from user
-Output: dict — keyword clusters with intent, volumes, competition, PAA questions
+Output: dict — { seed_keywords, keyword_ideas: [{keyword, avg_monthly_searches,
+                 competition, trend_score}], total_fetched }
 """
 
-import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Sequence
 
-from google.ads.googleads.client import GoogleAdsClient
-
-from src.pipeline.prompts import (
-    SEO_EXPERT_SYSTEM,
-    keyword_intent_classification_prompt,
-    make_cache_block,
-    make_text_block,
-)
 from src.pipeline.stage_result import StageResult
-from src.provider import get_llm_client
-from src.utils.agent_config import load_agent_config, resolve_model
 from src.utils.logger import get_logger
 from src.utils.rate_limiter import RateLimiter
 
@@ -48,74 +38,40 @@ class KeywordIdea:
 
 
 class Step1KeywordExpansion:
-    """Expands seed keywords into ranked, intent-classified clusters."""
+    """Fetches raw keyword ideas from Google Ads Keyword Planner."""
 
     def __init__(self, settings=None):
         self._settings = settings
-        self._client = get_llm_client(settings)
-        _cfg = load_agent_config(__file__)
-        self._model = resolve_model(_cfg, self._client)
-        self._temperature = _cfg.get("temperature", 0.2)
-        self._max_tokens = _cfg.get("max_tokens", 4096)
-        self._system_prompt = _cfg.get("system_prompt", SEO_EXPERT_SYSTEM)
 
-    def run(self, seed_keywords: List[str]) -> dict:
+    def run(self, seed_keywords: List[str]) -> StageResult:
         """
         Args:
             seed_keywords: User-provided seed keywords.
 
         Returns:
             {
-                "clusters": [
+                "seed_keywords": [str],
+                "keyword_ideas": [
                     {
-                        "cluster_name": str,
-                        "primary_keyword": str,
-                        "supporting_keywords": [str],
-                        "intent": str,
-                        "opportunity_score": int,
+                        "keyword": str,
                         "avg_monthly_searches": int,
                         "competition": str,
-                        "paa_questions": [str],
+                        "trend_score": float,
                     }
                 ],
-                "top_cluster_names": [str],
-                "seed_keywords": [str],
-                "total_ideas_fetched": int,
+                "total_fetched": int,
             }
         """
-        logger.info(f"Expanding {len(seed_keywords)} seed keywords via Google Ads API...")
+        logger.info(f"Fetching keyword ideas for {len(seed_keywords)} seeds via Google Ads API...")
         ideas = self._fetch_keyword_ideas(seed_keywords)
-        logger.info(f"Fetched {len(ideas)} keyword ideas. Running LLM cluster analysis...")
+        logger.info(f"Fetched {len(ideas)} keyword ideas.")
 
-        ideas_dicts = [k.to_dict() for k in ideas]
-        prompt = keyword_intent_classification_prompt(seed_keywords, ideas_dicts)
-
-        response = self._client.messages.create(
-            model=self._model,
-            max_tokens=self._max_tokens,
-            temperature=self._temperature,
-            system=[make_cache_block(self._system_prompt)],
-            messages=[{"role": "user", "content": [make_text_block(prompt)]}],
-        )
-
-        tokens_in = response.usage.input_tokens
-        tokens_out = response.usage.output_tokens
-        raw = response.content[0].text.strip()
-
-        try:
-            clusters = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            logger.error(f"LLM returned invalid JSON: {raw[:300]}")
-            raise RuntimeError(f"Step 1 JSON parse failed: {exc}") from exc
-
-        clusters["seed_keywords"] = seed_keywords
-        clusters["total_ideas_fetched"] = len(ideas)
-
-        logger.info(
-            f"Step 1 complete: {len(clusters.get('clusters', []))} clusters found. "
-            f"Top: {clusters.get('top_cluster_names', [])}"
-        )
-        return StageResult(value=clusters, tokens_in=tokens_in, tokens_out=tokens_out)
+        value = {
+            "seed_keywords": seed_keywords,
+            "keyword_ideas": [k.to_dict() for k in ideas],
+            "total_fetched": len(ideas),
+        }
+        return StageResult(value=value, tokens_in=0, tokens_out=0)
 
     def _fetch_keyword_ideas(
         self,
@@ -125,9 +81,9 @@ class Step1KeywordExpansion:
         language_code: str = "languageConstants/1000",
         geo_target: str = "geoTargetConstants/2840",
     ) -> List[KeywordIdea]:
-        """Call Google Ads Keyword Planner and return raw ideas."""
         _rate_limiter.acquire()
         try:
+            from google.ads.googleads.client import GoogleAdsClient
             ads_client = GoogleAdsClient.load_from_dict(self._settings.google_ads_config())
             svc = ads_client.get_service("KeywordPlanIdeaService")
             request = ads_client.get_type("GenerateKeywordIdeasRequest")
@@ -164,7 +120,6 @@ class Step1KeywordExpansion:
 
 
 def _trend_score(monthly_volumes, avg: int) -> float:
-    """Upward-trend score: ratio of recent 3 months to historical average (0-100)."""
     if not monthly_volumes or avg == 0:
         return 0.0
     vols = [int(v.monthly_searches or 0) for v in monthly_volumes]

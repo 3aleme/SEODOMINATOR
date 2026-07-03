@@ -28,7 +28,7 @@ _PLATFORMS = ["twitter", "linkedin", "reddit", "bluesky"]
 _MAX_TOKENS = 512
 
 
-class Step11AmplifyDistribute:
+class Step12AmplifyDistribute:
     def __init__(self, settings=None):
         self._settings = settings
         self._client = get_llm_client(settings)

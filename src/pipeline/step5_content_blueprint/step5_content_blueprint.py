@@ -24,7 +24,7 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-class Step4ContentBlueprint:
+class Step5ContentBlueprint:
     """Generates a comprehensive content outline using SERP intel and competitor analysis."""
 
     def __init__(self, settings=None):

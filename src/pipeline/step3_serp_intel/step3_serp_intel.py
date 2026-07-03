@@ -39,7 +39,7 @@ _DIFFICULTY_MAP = {
 }
 
 
-class Step2SerpIntel:
+class Step3SerpIntel:
     """Derives SERP intelligence from keyword cluster data — no external API calls."""
 
     def __init__(self, settings=None):

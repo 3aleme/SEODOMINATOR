@@ -73,7 +73,7 @@
       <template x-if="!runningAll">
         <span class="flex items-center gap-2">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3l14 9-14 9V3z"/></svg>
-          <span x-text="steps[0].status !== 'done' ? 'Run Step 1 first' : allDone ? 'Pipeline complete' : 'Run Steps 2–12'"></span>
+          <span x-text="steps[0].status !== 'done' ? 'Run Step 1 first' : allDone ? 'Pipeline complete' : 'Run Steps 2–13'"></span>
         </span>
       </template>
     </button>
@@ -289,67 +289,117 @@
                   </template>
                 </button>
 
-                <!-- Step 1 results (clusters) -->
-                <div x-show="steps[0].output" x-transition class="space-y-3 pt-1">
+                <!-- Step 1 results — raw keyword ideas table -->
+                <div x-show="steps[0].output" x-transition class="space-y-2 pt-1">
                   <div class="flex items-center justify-between">
-                    <span class="text-xs font-medium text-gray-500 uppercase tracking-widest">Keyword Clusters</span>
-                    <span class="text-xs text-gray-600" x-text="`${steps[0].output?.clusters?.length || 0} clusters`"></span>
+                    <span class="text-xs font-medium text-gray-500 uppercase tracking-widest">Keyword Ideas</span>
+                    <span class="text-xs text-gray-600" x-text="`${(steps[0].output?.keyword_ideas || []).length} results`"></span>
                   </div>
-                  <template x-for="(cluster, ci) in steps[0].output?.clusters || []" :key="ci">
-                    <div class="border rounded-xl overflow-hidden" :class="cluster.is_top_target ? 'border-brand/50' : 'border-surface-border'">
-                      <div class="p-3 cursor-pointer flex items-start gap-3 justify-between" :class="cluster.is_top_target ? 'bg-brand/5' : ''" @click="toggleCluster(ci)">
-                        <div class="flex-1 min-w-0">
-                          <div class="flex items-center gap-1.5 flex-wrap mb-0.5">
-                            <span x-show="cluster.is_top_target" class="text-xs font-semibold text-brand-light bg-brand/20 border border-brand/30 px-2 py-0.5 rounded-full">⭐ Top</span>
-                            <span class="text-xs text-gray-500 capitalize" x-text="cluster.intent"></span>
-                          </div>
-                          <p class="text-sm font-medium text-white" x-text="cluster.primary_keyword"></p>
-                          <p class="text-xs text-gray-600 mt-0.5">
-                            <span x-text="(cluster.avg_monthly_searches || 0).toLocaleString()"></span>/mo ·
-                            <span x-text="`${cluster.opportunity_score || 0}/100`"></span> score
-                          </p>
-                        </div>
-                        <div class="text-right shrink-0">
-                          <div class="text-base font-bold" :class="(cluster.opportunity_score||0) >= 70 ? 'text-green-400' : (cluster.opportunity_score||0) >= 40 ? 'text-yellow-400' : 'text-gray-500'" x-text="cluster.opportunity_score"></div>
-                          <svg class="w-3.5 h-3.5 text-gray-600 ml-auto mt-1 transition-transform" :class="openClusters.includes(ci) ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
-                        </div>
-                      </div>
-                      <div x-show="openClusters.includes(ci)" x-transition class="border-t border-surface-border px-3 py-3 space-y-3 text-xs">
-                        <div x-show="cluster.supporting_keywords?.length">
-                          <p class="text-gray-600 uppercase tracking-widest mb-1.5">Supporting</p>
-                          <div class="flex flex-wrap gap-1">
-                            <template x-for="kw in cluster.supporting_keywords" :key="kw">
-                              <span class="bg-surface border border-surface-border text-gray-400 rounded px-2 py-0.5" x-text="kw"></span>
-                            </template>
-                          </div>
-                        </div>
-                        <div x-show="cluster.paa_questions?.length">
-                          <p class="text-gray-600 uppercase tracking-widest mb-1.5">People Also Ask</p>
-                          <ul class="space-y-1">
-                            <template x-for="q in cluster.paa_questions" :key="q">
-                              <li class="text-gray-300 flex items-start gap-1.5"><span class="text-brand shrink-0">?</span><span x-text="q"></span></li>
-                            </template>
-                          </ul>
-                        </div>
-                        <button @click="useCluster(cluster)" class="w-full py-1.5 border border-brand/40 hover:border-brand hover:bg-brand/10 text-brand-light rounded-lg transition-all">Use this cluster →</button>
-                      </div>
-                    </div>
-                  </template>
+                  <div class="overflow-auto rounded-xl border border-surface-border max-h-72">
+                    <table class="w-full text-xs">
+                      <thead class="bg-surface sticky top-0">
+                        <tr class="text-left text-gray-500">
+                          <th class="px-3 py-2 font-medium">Keyword</th>
+                          <th class="px-3 py-2 font-medium text-right">Vol/mo</th>
+                          <th class="px-3 py-2 font-medium text-right">Competition</th>
+                          <th class="px-3 py-2 font-medium text-right">Trend</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <template x-for="(idea, ii) in steps[0].output?.keyword_ideas || []" :key="ii">
+                          <tr class="border-t border-surface-border hover:bg-surface transition-colors">
+                            <td class="px-3 py-2 text-gray-200 font-medium" x-text="idea.keyword"></td>
+                            <td class="px-3 py-2 text-gray-400 text-right font-mono" x-text="(idea.avg_monthly_searches || 0).toLocaleString()"></td>
+                            <td class="px-3 py-2 text-right">
+                              <span class="rounded px-1.5 py-0.5 text-xs font-medium"
+                                :class="{
+                                  'bg-green-500/20 text-green-400': idea.competition === 'LOW',
+                                  'bg-yellow-500/20 text-yellow-400': idea.competition === 'MEDIUM',
+                                  'bg-red-500/20 text-red-400': idea.competition === 'HIGH',
+                                  'bg-surface text-gray-500': !['LOW','MEDIUM','HIGH'].includes(idea.competition),
+                                }"
+                                x-text="idea.competition">
+                              </span>
+                            </td>
+                            <td class="px-3 py-2 text-right font-mono"
+                              :class="(idea.trend_score||0) >= 60 ? 'text-green-400' : (idea.trend_score||0) >= 30 ? 'text-yellow-400' : 'text-gray-500'"
+                              x-text="(idea.trend_score || 0).toFixed(0)">
+                            </td>
+                          </tr>
+                        </template>
+                      </tbody>
+                    </table>
+                  </div>
+                  <p class="text-xs text-gray-600">Run Step 2 to cluster these into intent groups →</p>
                 </div>
 
               </div>
             </template>
 
-            <!-- Steps 2–12: generic output view -->
+            <!-- Steps 2–13: generic output view, step 2 gets cluster accordion -->
             <template x-if="step.id !== 1">
               <div class="p-4 space-y-3">
                 <p class="text-xs text-gray-500" x-text="stepDescription(step.id)"></p>
                 <div x-show="step.status === 'error'" class="bg-red-500/10 border border-red-500/30 rounded-xl p-3">
                   <p class="text-red-400 text-xs font-mono" x-text="step.error"></p>
                 </div>
-                <div x-show="step.output" x-transition class="bg-surface border border-surface-border rounded-xl overflow-auto max-h-80">
-                  <pre class="text-xs text-gray-300 p-3" x-text="JSON.stringify(step.output, null, 2)"></pre>
-                </div>
+
+                <!-- Step 2: cluster accordion -->
+                <template x-if="step.id === 2 && step.output">
+                  <div x-transition class="space-y-2">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-medium text-gray-500 uppercase tracking-widest">Keyword Clusters</span>
+                      <span class="text-xs text-gray-600" x-text="`${step.output?.clusters?.length || 0} clusters`"></span>
+                    </div>
+                    <template x-for="(cluster, ci) in step.output?.clusters || []" :key="ci">
+                      <div class="border rounded-xl overflow-hidden" :class="cluster.is_top_target ? 'border-brand/50' : 'border-surface-border'">
+                        <div class="p-3 cursor-pointer flex items-start gap-3 justify-between" :class="cluster.is_top_target ? 'bg-brand/5' : ''" @click="toggleCluster(ci)">
+                          <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-1.5 flex-wrap mb-0.5">
+                              <span x-show="cluster.is_top_target" class="text-xs font-semibold text-brand-light bg-brand/20 border border-brand/30 px-2 py-0.5 rounded-full">⭐ Top</span>
+                              <span class="text-xs text-gray-500 capitalize" x-text="cluster.intent"></span>
+                            </div>
+                            <p class="text-sm font-medium text-white" x-text="cluster.primary_keyword"></p>
+                            <p class="text-xs text-gray-600 mt-0.5">
+                              <span x-text="(cluster.avg_monthly_searches || 0).toLocaleString()"></span>/mo ·
+                              <span x-text="`${cluster.opportunity_score || 0}/100`"></span> score
+                            </p>
+                          </div>
+                          <div class="text-right shrink-0">
+                            <div class="text-base font-bold" :class="(cluster.opportunity_score||0) >= 70 ? 'text-green-400' : (cluster.opportunity_score||0) >= 40 ? 'text-yellow-400' : 'text-gray-500'" x-text="cluster.opportunity_score"></div>
+                            <svg class="w-3.5 h-3.5 text-gray-600 ml-auto mt-1 transition-transform" :class="openClusters.includes(ci) ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                          </div>
+                        </div>
+                        <div x-show="openClusters.includes(ci)" x-transition class="border-t border-surface-border px-3 py-3 space-y-3 text-xs">
+                          <div x-show="cluster.supporting_keywords?.length">
+                            <p class="text-gray-600 uppercase tracking-widest mb-1.5">Supporting</p>
+                            <div class="flex flex-wrap gap-1">
+                              <template x-for="kw in cluster.supporting_keywords" :key="kw">
+                                <span class="bg-surface border border-surface-border text-gray-400 rounded px-2 py-0.5" x-text="kw"></span>
+                              </template>
+                            </div>
+                          </div>
+                          <div x-show="cluster.paa_questions?.length">
+                            <p class="text-gray-600 uppercase tracking-widest mb-1.5">People Also Ask</p>
+                            <ul class="space-y-1">
+                              <template x-for="q in cluster.paa_questions" :key="q">
+                                <li class="text-gray-300 flex items-start gap-1.5"><span class="text-brand shrink-0">?</span><span x-text="q"></span></li>
+                              </template>
+                            </ul>
+                          </div>
+                          <button @click="useCluster(cluster)" class="w-full py-1.5 border border-brand/40 hover:border-brand hover:bg-brand/10 text-brand-light rounded-lg transition-all">Use this cluster →</button>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+
+                <!-- Steps 3–13: raw JSON output -->
+                <template x-if="step.id !== 2">
+                  <div x-show="step.output" x-transition class="bg-surface border border-surface-border rounded-xl overflow-auto max-h-80">
+                    <pre class="text-xs text-gray-300 p-3" x-text="JSON.stringify(step.output, null, 2)"></pre>
+                  </div>
+                </template>
               </div>
             </template>
 
@@ -364,18 +414,19 @@
 
 <script>
 const STEP_META = [
-  { id: 1,  label: 'Keyword Expansion',    desc: 'Fetches keyword ideas from Google Ads API, clusters by intent, and scores opportunities.' },
-  { id: 2,  label: 'SERP Intelligence',    desc: 'Scrapes search results for seed keywords to understand who ranks and why.' },
-  { id: 3,  label: 'Competitor Analysis',  desc: 'Deep-reads competitor pages to extract content strategies, word counts, and gaps.' },
-  { id: 4,  label: 'Content Blueprint',    desc: 'Designs a comprehensive article structure that outranks the competition.' },
-  { id: 5,  label: 'Deep Write',           desc: 'Writes the full article — draft, review, and revision — targeting 2,000+ words.' },
-  { id: 6,  label: 'SEO Optimization',     desc: 'Inserts keywords, writes meta title/description, and scores on-page SEO.' },
-  { id: 7,  label: 'Media Generation',     desc: 'Generates featured image and section images via AI.' },
-  { id: 8,  label: 'Internal Linking',     desc: 'Injects contextual internal links from existing Cycolaps posts.' },
-  { id: 9,  label: 'Technical SEO',        desc: 'Builds canonical URL, OG tags, XML sitemap entry, and JSON-LD schemas.' },
-  { id: 10, label: 'Publish',              desc: 'Upserts the post to Cycolaps Neon DB and returns the live URL.' },
-  { id: 11, label: 'Amplify & Distribute', desc: 'Drafts social posts for Twitter, LinkedIn, Reddit, Bluesky, and newsletter.' },
-  { id: 12, label: 'Track & Report',       desc: 'Logs keyword tracking rows and captures GSC baseline rankings.' },
+  { id: 1,  label: 'Keyword Fetch',        desc: 'Calls Google Ads Keyword Planner and returns raw keyword ideas with search volume, competition, and trend score.' },
+  { id: 2,  label: 'Keyword Clustering',   desc: 'LLM classifies intent, clusters related keywords, scores opportunities, and extracts PAA questions.' },
+  { id: 3,  label: 'SERP Intelligence',    desc: 'Scrapes search results for top-ranking pages to understand who ranks and why.' },
+  { id: 4,  label: 'Competitor Analysis',  desc: 'Deep-reads competitor pages to extract content strategies, word counts, and gaps.' },
+  { id: 5,  label: 'Content Blueprint',    desc: 'Designs a comprehensive article structure that outranks the competition.' },
+  { id: 6,  label: 'Deep Write',           desc: 'Writes the full article — draft, review, and revision — targeting 2,000+ words.' },
+  { id: 7,  label: 'SEO Optimization',     desc: 'Inserts keywords, writes meta title/description, and scores on-page SEO.' },
+  { id: 8,  label: 'Media Generation',     desc: 'Generates featured image and section images via AI.' },
+  { id: 9,  label: 'Internal Linking',     desc: 'Injects contextual internal links from existing Cycolaps posts.' },
+  { id: 10, label: 'Technical SEO',        desc: 'Builds canonical URL, OG tags, XML sitemap entry, and JSON-LD schemas.' },
+  { id: 11, label: 'Publish',              desc: 'Upserts the post to Cycolaps Neon DB and returns the live URL.' },
+  { id: 12, label: 'Amplify & Distribute', desc: 'Drafts social posts for Twitter, LinkedIn, Reddit, Bluesky, and newsletter.' },
+  { id: 13, label: 'Track & Report',       desc: 'Logs keyword tracking rows and captures GSC baseline rankings.' },
 ];
 
 function app() {
@@ -534,18 +585,19 @@ function app() {
     makeSummary(id, data) {
       if (!data) return null;
       switch (id) {
-        case 1:  return `${data.clusters?.length || 0} clusters · ${data.total_ideas_fetched || 0} ideas`;
-        case 2:  return `${data.results?.length || Object.keys(data).length || '—'} SERP entries`;
-        case 3:  return `${data.competitors?.length || '—'} competitors analyzed`;
-        case 4:  return `Blueprint: ${data.title || data.working_title || '—'}`;
-        case 5:  return `${data.word_count || '—'} words written`;
-        case 6:  return `SEO score: ${data.seo_score || '—'} · ${data.meta_title ? 'meta ready' : '—'}`;
-        case 7:  return `${(data.image_urls || []).length} images generated`;
-        case 8:  return `${(data.internal_links_injected || data.links_added || 0)} links injected`;
-        case 9:  return `Schema: ${data.schema_types?.join(', ') || 'ready'} · canonical set`;
-        case 10: return `Published: ${data.published_url || data || '—'}`;
-        case 11: return `${Object.keys(data.posts || data || {}).length} social posts drafted`;
-        case 12: return `${data.keywords_tracked || '—'} keywords tracked`;
+        case 1:  return `${data.total_fetched || (data.keyword_ideas || []).length} ideas fetched`;
+        case 2:  return `${data.clusters?.length || 0} clusters · ${data.total_ideas_fetched || 0} ideas`;
+        case 3:  return `${data.results?.length || Object.keys(data).length || '—'} SERP entries`;
+        case 4:  return `${data.competitors?.length || '—'} competitors analyzed`;
+        case 5:  return `Blueprint: ${data.title || data.working_title || '—'}`;
+        case 6:  return `${data.word_count || '—'} words written`;
+        case 7:  return `SEO score: ${data.seo_score || '—'} · ${data.meta_title ? 'meta ready' : '—'}`;
+        case 8:  return `${(data.image_urls || []).length} images generated`;
+        case 9:  return `${(data.internal_links_injected || data.links_added || 0)} links injected`;
+        case 10: return `Schema ready · canonical set`;
+        case 11: return `Published: ${data.published_url || data || '—'}`;
+        case 12: return `${Object.keys(data.posts || data || {}).length} social posts drafted`;
+        case 13: return `${data.keywords_tracked || '—'} keywords tracked`;
         default: return 'done';
       }
     },
@@ -553,7 +605,7 @@ function app() {
     async runAll() {
       if (this.runningAll || this.steps[0].status !== 'done') return;
       this.runningAll = true;
-      for (let id = 2; id <= 12; id++) {
+      for (let id = 2; id <= 13; id++) {
         this.openStep = id;
         await this.runStep(id);
         if (this.steps[id - 1].status === 'error') break;

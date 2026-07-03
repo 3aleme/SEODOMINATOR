@@ -25,7 +25,7 @@ _SITE_BASE = "https://cycolaps.com"
 _BLOG_BASE = f"{_SITE_BASE}/blog"
 
 
-class Step10Publish:
+class Step11Publish:
     def __init__(self, settings=None):
         self._settings = settings
 

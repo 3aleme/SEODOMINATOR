@@ -33,7 +33,7 @@ logger = get_logger(__name__)
 _scrape_limiter = RateLimiter(calls=3, period=5.0)  # 3 requests per 5 seconds
 
 
-class Step3CompetitorAnalysis:
+class Step4CompetitorAnalysis:
     """Fetches and LLM-analyzes top competitor articles for the primary keyword."""
 
     def __init__(self, settings=None):

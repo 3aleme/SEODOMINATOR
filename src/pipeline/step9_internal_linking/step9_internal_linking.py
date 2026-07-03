@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 _SITE_BASE = "https://cycolaps.com"
 
 
-class Step8InternalLinking:
+class Step9InternalLinking:
     """Bidirectional internal linking engine."""
 
     def __init__(self, settings=None):

@@ -43,7 +43,7 @@ _GEMINI_IMG_URL    = "https://generativelanguage.googleapis.com/v1beta/models/im
 _BLOB_UPLOAD_URL   = "https://blob.vercel-storage.com/blog/{filename}"
 
 
-class Step7MediaGeneration:
+class Step8MediaGeneration:
     """Generates hero + in-article images and uploads them to Vercel Blob."""
 
     def __init__(self, settings=None):

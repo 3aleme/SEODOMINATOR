@@ -25,7 +25,7 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-class Step6SeoOptimization:
+class Step7SeoOptimization:
     """Optimizes the article for SEO: keyword density, meta, tags, and structured data."""
 
     def __init__(self, settings=None):
